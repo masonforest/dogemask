@@ -1,0 +1,30 @@
+[package]
+name = "web"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-rt = "1.0.0"
+actix-web = "4"
+actix-files = "*"
+
+oauth2 = "3.0.0-alpha.9"
+base64 = "0.21.0"
+rand = "0.7"
+url = "2.1"
+http = "0.1"
+tokio = { version = "1", features = ["full"] }
+
+futures = "0.3.1"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
+dotenv = "*"
+actix-session = { version = "0.7.2", features = ["cookie-session"] }
+log = "*"
+env_logger = "*"
+sha256 = "*"
+actix-cors = "0.6.4"
+hex="*"

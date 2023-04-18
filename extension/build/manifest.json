@@ -1,0 +1,13 @@
+{
+  "name": "Dogemask",
+  "description": "Dogemask Wallet",
+  "version": "0.1",
+  "manifest_version": 3,
+  "permissions": [
+  ],
+  "action": {
+    "default_title": "Dogemask",
+    "default_icon": "logo192.png",
+    "default_popup": "index.html"
+  }
+}

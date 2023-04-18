@@ -1,0 +1,46 @@
+@font-face {
+  font-family: "comic-sans";
+  src: url("./fonts/comic-sans.woff");
+}
+
+body {
+  font-family: "comic-sans", "Lato", Arial, Helvetica, sans-serif;
+  background-color: #fcfcfc;
+  display: flex;
+}
+
+h1 {
+  text-align: center;
+}
+
+#doge-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+#doge {
+  width: 300px;
+}
+
+#eyes-wrapper {
+  position: absolute;
+  top: 85px;
+  width: 177px;
+  left: 32px;
+  transform: rotate(10deg);
+}
+
+#fox-mask {
+  position: absolute;
+  top: 8px;
+  left: 3px;
+  width: 232px;
+  transform: rotate(10deg);
+}
+
+.btn-primary {
+  background-color: #1B9CEF;
+  border-radius: 9999px;
+}

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dogemask</title>
+    <style>
+      :root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+    </style>
+  </head>
+  <body>
+
+ <div id="app">
+      <a href="https://vitejs.dev" target="_blank">
+        <img src="vite.svg" class="logo" alt="Vite logo" />
+      </a>
+      <h1>Aphter</h1>
+    <div class="card">
+      <div id="count">
+        <button>
+          count is {{count}}
+        </button>
+      </div>
+      <p>
+        Edit <code>src/app.tsx</code> and save to test HMR
+      </p>
+    </div>
+    <p>This is an example of how to use {{name}} with Actix Web.</p>
+    </div>
+  
+    <script type="module" src="http://localhost:5173/@vite/client"></script>
+    <script type="module" src="http://localhost:5173/src/main.tsx"></script>
+  </body>
+</html>
