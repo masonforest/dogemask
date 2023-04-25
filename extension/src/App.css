@@ -1,18 +1,22 @@
-@font-face {
-  font-family: "comic-sans";
-  src: url("./fonts/comic-sans.woff");
-}
+@import "./styles/doge-eyes.css";
 
 body {
+  padding: 10px;
+  width: 360px;
+  height: 600px;
   font-family: "comic-sans", "Lato", Arial, Helvetica, sans-serif;
   background-color: #fcfcfc;
   display: flex;
 }
 
-h1 {
-  text-align: center;
+@font-face {
+  font-family: "comic-sans";
+  src: url("./fonts/comic-sans.woff");
 }
 
+.address {
+  font-size: 14px;
+}
 #doge-wrapper {
   position: relative;
   display: flex;
@@ -38,9 +42,4 @@ h1 {
   left: 3px;
   width: 232px;
   transform: rotate(10deg);
-}
-
-.btn-primary {
-  background-color: #1B9CEF;
-  border-radius: 9999px;
 }

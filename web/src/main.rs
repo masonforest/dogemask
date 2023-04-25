@@ -81,7 +81,7 @@ async fn redirect(
         .finish())
 }
 
-async fn index(
+async fn get_session_address(
     _session: Session,
     _data: web::Data<AppState>,
     _req: HttpRequest,
@@ -93,7 +93,13 @@ async fn index(
             }
         ))))
     } else {
-        Ok(HttpResponse::Unauthorized().finish())
+        Ok(HttpResponse::Ok().json(web::Json(json!(
+            {
+                "badSession": 1
+            }
+        ))))
+        
+        // Ok(HttpResponse::Unauthorized().finish())
     }
 }
 
@@ -107,6 +113,8 @@ async fn main() -> std::io::Result<()> {
             .decode(env::var("COOKIE_MASTER_KEY").expect("COOKIE_MASTER_KEY not set"))
             .expect("invalid bas64 key"),
     );
+    let oauth_callback_url = env::var("OAUTH_CALLBACK_URL").expect("Missing OAUTH_CALLBACK_URL.");
+    println!("OAUTH_CALLBACK_URL: {}", oauth_callback_url);
     let twitter_client_id = ClientId::new(
         env::var("TWITTER_CLIENT_ID").expect("Missing the TWITTER_CLIENT_ID environment variable."),
     );
@@ -126,7 +134,7 @@ async fn main() -> std::io::Result<()> {
         Some(token_url),
     )
     .set_redirect_url(
-        RedirectUrl::new("http://localhost:3031/auth".to_string()).expect("Invalid redirect URL"),
+        RedirectUrl::new(oauth_callback_url).expect("Invalid redirect URL"),
     );
 
     HttpServer::new(move || {
@@ -156,9 +164,9 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         web::get()
                             .guard(actix_web::guard::Header("content-type", "application/json"))
-                            .to(index),
+                            .to(get_session_address)
                     )
-                    .route(web::get().to(redirect)),
+                    .route(web::get().to(redirect))
             )
             .service(actix_files::Files::new("", "web/public").show_files_listing())
     })

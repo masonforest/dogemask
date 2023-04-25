@@ -1,9 +1,27 @@
-import { useEffect, useState, useRef } from "react";
-import { sha256 } from "@noble/hashes/sha256";
-import { ripemd160 } from "@noble/hashes/ripemd160";
+import {useEffect, useState, useRef} from "react";
+import {sha256} from "@noble/hashes/sha256";
+import {ripemd160} from "@noble/hashes/ripemd160";
 import * as secp256k1 from "@noble/secp256k1";
-import { base58check } from "@scure/base";
-import { addressFromPublicKey, CHAIN_IDS } from "crypto-wallet";
+import {base58check} from "@scure/base";
+import useFetch from "./useFetch.js";
+import {addressFromPublicKey, CHAIN_IDS} from "doge-wallet";
+import { hexToBytes } from '@noble/hashes/utils';
+
+export async function fetchUnspentTransationOutputsBlockCypher(address) {
+  const response = await fetch(
+    `https://api.blockcypher.com/v1/doge/main/addrs/${address}?unspentOnly=true&includeScript=true`,
+    { cache: "no-cache" }
+  );
+  const json = await response.json();
+  return json.txrefs.map(({ tx_hash, tx_output_n, script, value }, i) => {
+    return {
+      hash: hexToBytes(tx_hash).reverse(),
+      index: tx_output_n,
+      script: hexToBytes(script),
+      value: BigInt(parseInt(value)),
+    };
+  });
+}
 
 function isUint8a(bytes) {
   return bytes instanceof Uint8Array;
@@ -39,14 +57,6 @@ export function useAddress(coin, privateKey) {
           secp256k1.getPublicKey(privateKey, true)
         )
       );
-      // setAddress(
-      //   base58check(sha256).encode(
-      //     concatBytes(
-      //       new Uint8Array([COINS[coin].networkId]),
-      //       await ripemd160(sha256(secp256k1.getPublicKey(privateKey, true)))
-      //     )
-      //   )
-      // );
     }
 
     if (privateKey) {
@@ -56,25 +66,47 @@ export function useAddress(coin, privateKey) {
   return address;
 }
 
+export function useUtxos(address) {
+  // const response = useFetch(`https://lobby3-cors-anywhere.herokuapp.com/https://dogechain.info/api/v1/unspent/${address}`)
+  // if (response) {
+  // console.log(response)
+  //   return response.unspent_outputs
+  // }
+  const [utxos, setUtxos] = useState(null);
+  useEffect(() => {
+    async function fetchUtxos() {
+      let res = await fetch(
+        `https://dogefura.herokuapp.com/api/v1/unspent/${address}`,
+        {mode: "cors"}
+      );
+      let reJson = await res.json();
+      setUtxos(reJson.unspent_outputs);
+    }
+    if (address) {
+      fetchUtxos();
+    }
+  }, [address]);
+  return utxos;
+}
+
 export function useBalance(address) {
   const [balance, setBalance] = useState(null);
   const fetchBalance = async (address) => {
-      if (!address) {
-        return
-      }
-      let res = await fetch(
-       // `https://dogefura.onrender.com/api/v1/address/balance/DL5eP2SCfL3eM55vXPern8gpjWrS6DNeSv`,
-       `https://api.blockcypher.com/v1/doge/main/addrs/${address}/balance`,
-        { mode: "cors" }
-      );
-      let reJson = await res.json();
-      setBalance(parseInt(reJson.balance)/100000000);
-  }
-  useEffect(() => fetchBalance (address), [address]);
-  useInterval(fetchBalance, 30000);
+    if (!address) {
+      return;
+    }
+    let res = await fetch(
+      // `https://dogefura.onrender.com/api/v1/address/balance/DL5eP2SCfL3eM55vXPern8gpjWrS6DNeSv`,
+      `https://api.blockcypher.com/v1/doge/main/addrs/${address}/balance`,
+      {mode: "cors"}
+    );
+    let reJson = await res.json();
+    setBalance(parseInt(reJson.balance) / 100000000);
+  };
+  useEffect(() => fetchBalance(address), [address]);
+  useInterval(() => fetchBalance(address), 30000);
   return balance;
 }
-
 function useInterval(callback, delay) {
   const intervalRef = useRef(null);
   const savedCallback = useRef(callback);
@@ -83,14 +115,26 @@ function useInterval(callback, delay) {
   }, [callback]);
   useEffect(() => {
     const tick = () => savedCallback.current();
-    if (typeof delay === 'number') {
+    if (typeof delay === "number") {
       intervalRef.current = window.setInterval(tick, delay);
+      tick();
       return () => window.clearInterval(intervalRef.current);
     }
   }, [delay]);
   return intervalRef;
 }
+const byteToHex = [];
 
-export function hex(str) {
-  return new Uint8Array(Buffer.from(str.join("").replace(/\s+/g, ""), "hex"));
+for (let n = 0; n <= 0xff; ++n) {
+  const hexOctet = n.toString(16).padStart(2, "0");
+  byteToHex.push(hexOctet);
+}
+
+export function hex(arrayBuffer) {
+  const buff = new Uint8Array(arrayBuffer);
+  const hexOctets = []; // new Array(buff.length) is even faster (preallocates necessary array size), then use hexOctets[i] instead of .push()
+
+  for (let i = 0; i < buff.length; ++i) hexOctets.push(byteToHex[buff[i]]);
+
+  return hexOctets.join("");
 }
