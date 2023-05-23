@@ -1,4 +1,6 @@
 import {useState, useEffect} from "react";
+import {addressFromPublicKey, CHAIN_IDS} from "doge-wallet";
+import * as secp256k1 from "@noble/secp256k1";
 import CreateWallet from "./CreateWallet";
 import Wallet from "./Wallet";
 import "bootstrap/dist/css/bootstrap.css";
@@ -11,8 +13,15 @@ function App() {
   const [privateKey, setPrivateKey] = useLocalStorage("privateKey");
   const fetchData = async () => {
     try {
-      const response = await fetch(API_URL, {
-        credentials: "include",
+      if(!privateKey) {
+        setPage("CreateWallet");
+        return;
+      }
+      const address = await addressFromPublicKey(
+        CHAIN_IDS.DOGE,
+        secp256k1.getPublicKey(privateKey, true)
+      );
+      const response = await fetch(API_URL + `?address=${address}`, {
         headers: {
           "Content-type": "application/json",
         },
@@ -21,9 +30,8 @@ function App() {
       if (response.status == 200) {
         const json = await response.json();
         setPage("Wallet");
-      } else if (response.status == 401) {
-        setPage("Wallet");
-        // setPage("CreateWallet");
+      } else if (response.status == 404) {
+        setPage("CreateWallet");
       }
     } catch (error) {
       console.log("error", error);

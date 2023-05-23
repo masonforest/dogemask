@@ -1,41 +1,16 @@
-import clipboard from "./clipboard.svg";
-import * as secp256k1 from "@noble/secp256k1";
 import {useState} from "react";
-import {sha256} from "@noble/hashes/sha256";
 import Address from "./Address";
+import * as secp256k1 from "@noble/secp256k1";
+import {NODE_URL} from "./constants";
 import {useAddress, useBalance, useUtxos, hex,
   fetchUnspentTransationOutputsBlockCypher,
 } from "./utils";
 import {
-  addressToPublicKeyHash,
   numberToSatoshis,
   CHAIN_IDS,
   createSignedTransaction,
   addressFromPublicKey,
 } from "doge-wallet";
-import {base58check} from "@scure/base";
-import React, {Component} from "react";
-import Select from "react-select";
-
-const options = [
-  {value: "chocolate", label: "D6epyfmQS1eJTiM1sVdoqiX7fYouE1WWhD"},
-];
-const customStyles = {
-  option: (provided, state) => ({
-    ...provided,
-    fontSize: "12px",
-  }),
-  singleValue: (provided, state) => ({
-    ...provided,
-    fontSize: "12px",
-  }),
-};
-
-function arrayBufferToHex(arrayBuffer) {
-  return Array.prototype.map
-    .call(new Uint8Array(arrayBuffer), (n) => n.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 export default function Wallet(props) {
   const {privateKey} = props;
@@ -48,11 +23,9 @@ export default function Wallet(props) {
     setRecipient("");
 
     const publicKey = await secp256k1.getPublicKey(privateKey, true);
-console.log("1")
     const unspentTransationOutputs = await fetchUnspentTransationOutputsBlockCypher(
       await addressFromPublicKey(CHAIN_IDS.DOGE, publicKey)
     );
-console.log("2")
     const signedTransation = await createSignedTransaction({
       chainId: CHAIN_IDS.DOGE,
       unspentTransationOutputs,
@@ -60,9 +33,7 @@ console.log("2")
       value: numberToSatoshis(parseFloat(amount)),
       privateKey,
     });
-console.log("3")
-console.log(hex(signedTransation))
-    const rawResponse = await fetch("https://dogefura.onrender.com/", {
+    const rawResponse = await fetch(NODE_URL, {
       mode: "cors",
       method: "POST",
       headers: {
@@ -75,7 +46,6 @@ console.log(hex(signedTransation))
         params: [hex(signedTransation)],
       }),
     });
-    const content = await rawResponse.json();
   };
 
   return (

@@ -2,17 +2,24 @@ use actix_cors::Cors;
 use actix_session::{
     config::PersistentSession, storage::CookieSessionStore, Session, SessionMiddleware,
 };
+
 use actix_web::http::header;
 use actix_web::web::Data;
+
 use actix_web::Responder;
 use actix_web::{
     cookie::{self, Key},
     middleware::Logger,
-    web, App, HttpRequest, HttpResponse, HttpServer, Result,
+    web, HttpServer, Result,
 };
+use actix_web::{App, HttpResponse};
 use base64::{engine::general_purpose, Engine as _};
 use dotenv::dotenv;
+use mime;
 use oauth2::basic::BasicClient;
+use oauth2::reqwest::async_http_client;
+use oauth2::PkceCodeVerifier;
+use oauth2::TokenResponse;
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, RedirectUrl,
     Scope, TokenUrl,
@@ -20,10 +27,17 @@ use oauth2::{
 use rand::RngCore;
 use serde::Deserialize;
 use serde_json::json;
+
+use sqlx::postgres::PgPoolOptions;
+use sqlx::Executor;
+use sqlx::PgPool;
+
+use sqlx::Row;
 use std::env;
 
 struct AppState {
     oauth: BasicClient,
+    db: sqlx::PgPool,
 }
 
 #[derive(Deserialize)]
@@ -33,24 +47,58 @@ pub struct AuthRequest {
 }
 
 #[derive(Deserialize)]
-pub struct RedirectRequest {
+pub struct AddressQuery {
     address: String,
+}
+
+#[derive(Deserialize)]
+struct User {
+    username: String,
+}
+
+#[derive(Deserialize)]
+struct Response {
+    data: User,
 }
 
 async fn auth(
     session: Session,
-    data: web::Data<AppState>,
+    state: web::Data<AppState>,
     params: web::Query<AuthRequest>,
-    _req: HttpRequest,
 ) -> Result<HttpResponse> {
     let expected_csrf_token = session.get::<[u8; 32]>("csrf").unwrap().unwrap();
     let code = AuthorizationCode::new(params.code.clone());
-    let (csrf_token, _address) = params.state.split_at(64);
+    let (csrf_token, address) = params.state.split_at(64);
     if csrf_token.ne(&hex::encode(&expected_csrf_token[..])) {
         return Ok(HttpResponse::Unauthorized().finish());
     }
 
-    let _token = &data.oauth.exchange_code(code);
+    let pkce_code_verifier = PkceCodeVerifier::new(
+        session
+            .get::<String>("pkce_code_verifier")
+            .unwrap()
+            .unwrap(),
+    );
+    let code = state
+        .oauth
+        .exchange_code(code)
+        .set_pkce_verifier(pkce_code_verifier)
+        .request_async(async_http_client)
+        .await
+        .unwrap();
+
+    let client = reqwest::Client::new();
+    let response: Response = client
+        .get("https://api.twitter.com/2/users/me")
+        .bearer_auth(code.access_token().secret())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    insert_address(&state.db, &response.data.username, address).await;
 
     let html = include_str!("auth.html");
     Ok(HttpResponse::Ok().body(html))
@@ -59,52 +107,73 @@ async fn auth(
 async fn redirect(
     session: Session,
     data: web::Data<AppState>,
-    params: web::Query<RedirectRequest>,
-    _req: HttpRequest,
+    params: web::Query<AddressQuery>,
 ) -> Result<HttpResponse> {
     let mut csrf = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut csrf);
     session.insert("csrf", csrf)?;
-    let (pkce_code_challenge, _pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
+    let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
 
     let (authorize_url, _csrf_state) = &data
         .oauth
-        .authorize_url(|| CsrfToken::new([hex::encode(csrf), "Address".to_string()].concat()))
+        .authorize_url(|| CsrfToken::new([hex::encode(csrf), params.address.to_string()].concat()))
         .add_scope(Scope::new("users.read".to_string()))
+        .add_scope(Scope::new("tweet.read".to_string()))
         .set_pkce_challenge(pkce_code_challenge)
         .url();
 
     session.insert("address", params.address.clone())?;
+    session.insert("pkce_code_verifier", pkce_code_verifier.secret())?;
 
     Ok(HttpResponse::Found()
         .append_header((header::LOCATION, authorize_url.to_string()))
         .finish())
 }
 
-async fn get_session_address(
-    _session: Session,
-    _data: web::Data<AppState>,
-    _req: HttpRequest,
+async fn get_handle_for_address(
+    state: web::Data<AppState>,
+    params: web::Query<AddressQuery>,
 ) -> Result<impl Responder> {
-    if let Some(address) = _session.get::<String>("address").unwrap() {
-        Ok(HttpResponse::Ok().json(web::Json(json!(
-            {
-                "address": address
-            }
-        ))))
+    if let Ok(row) = state
+        .db
+        .fetch_one(sqlx::query!(
+            "select handle from handle_addresses where address = $1",
+            params.address
+        ))
+        .await
+    {
+        Ok(HttpResponse::Ok().json(web::Json(json!({ "handle": row
+        .get::<Option<String>, _>("handle")
+        .unwrap() }))))
     } else {
-        Ok(HttpResponse::Ok().json(web::Json(json!(
-            {
-                "badSession": 1
-            }
-        ))))
-        
-        // Ok(HttpResponse::Unauthorized().finish())
+        Ok(HttpResponse::NotFound().finish())
     }
+}
+async fn insert_address(executor: &PgPool, handle: &str, address: &str) {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let _pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&database_url)
+        .await
+        .unwrap();
+    executor
+        .execute(sqlx::query!(
+            "insert into handle_addresses (handle, address) values ($1, $2)",
+            handle,
+            address
+        ))
+        .await
+        .unwrap();
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&database_url)
+        .await
+        .unwrap();
     dotenv().ok();
     env_logger::init();
     log::info!("starting HTTP server at http://localhost:3031");
@@ -114,7 +183,6 @@ async fn main() -> std::io::Result<()> {
             .expect("invalid bas64 key"),
     );
     let oauth_callback_url = env::var("OAUTH_CALLBACK_URL").expect("Missing OAUTH_CALLBACK_URL.");
-    println!("OAUTH_CALLBACK_URL: {}", oauth_callback_url);
     let twitter_client_id = ClientId::new(
         env::var("TWITTER_CLIENT_ID").expect("Missing the TWITTER_CLIENT_ID environment variable."),
     );
@@ -133,9 +201,9 @@ async fn main() -> std::io::Result<()> {
         auth_url,
         Some(token_url),
     )
-    .set_redirect_url(
-        RedirectUrl::new(oauth_callback_url).expect("Invalid redirect URL"),
-    );
+    .set_redirect_uri(RedirectUrl::new(oauth_callback_url).expect("Invalid redirect URL"));
+
+    let json_cfg = web::JsonConfig::default().content_type(|mime| mime == mime::TEXT_PLAIN);
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -155,8 +223,10 @@ async fn main() -> std::io::Result<()> {
                     )
                     .build(),
             )
+            .app_data(json_cfg.clone())
             .app_data(Data::new(AppState {
                 oauth: client.clone(),
+                db: pool.clone(),
             }))
             .service(web::resource("/auth").to(auth))
             .service(
@@ -164,9 +234,9 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         web::get()
                             .guard(actix_web::guard::Header("content-type", "application/json"))
-                            .to(get_session_address)
+                            .to(get_handle_for_address),
                     )
-                    .route(web::get().to(redirect))
+                    .route(web::get().to(redirect)),
             )
             .service(actix_files::Files::new("", "web/public").show_files_listing())
     })

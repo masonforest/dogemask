@@ -10,7 +10,7 @@ actix-rt = "1.0.0"
 actix-web = "4"
 actix-files = "*"
 
-oauth2 = "3.0.0-alpha.9"
+oauth2 = { version = "4.4.0", features = ["reqwest"] }
 base64 = "0.21.0"
 rand = "0.7"
 url = "2.1"
@@ -27,4 +27,9 @@ log = "*"
 env_logger = "*"
 sha256 = "*"
 actix-cors = "0.6.4"
+idna = "0.3.0"
 hex="*"
+reqwest = {version = "0.11.17", features = ["multipart", "cookies", "json"]}
+scraper = "0.16.0"
+sqlx = { version = "0.6.3", features = [ "runtime-tokio-native-tls" , "postgres" ] }
+mime = "0.3.17"

@@ -7,11 +7,5 @@
     "default_title": "Dogemask",
     "default_icon": "icon.png",
     "default_popup": "index.html"
-  },
-  "host_permissions": [
-    "https://auth.dogemask.lol/"
-  ],
-  "permissions": [
-    "cookies"
-  ]
+  }
 }
